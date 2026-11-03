@@ -52,6 +52,10 @@ import {
 } from "./music";
 import type { Analysis, Note, Session, Tone } from "./music";
 import { GuitarEngine, makeDemo, renderWav } from "./audio";
+import NativeRack from "./NativeRack";
+import Appearance, { useAppearance } from "./Appearance";
+import { nativeRequest, nativeUpload } from "./native";
+import type { NativeStatus } from "./native";
 
 type Source = {
   title: string;
@@ -211,6 +215,17 @@ function Knob({
 }
 
 export default function App() {
+  const { appearance, setAppearance, style: appearanceStyle } = useAppearance();
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [nativeState, setNativeState] = useState<NativeStatus | null>(null);
+  const [nativeEnabled, setNativeEnabled] = useState(
+    () => localStorage.getItem("selah-native-mode") !== "false",
+  );
+  useEffect(() => {
+    localStorage.setItem("selah-native-mode", String(nativeEnabled));
+  }, [nativeEnabled]);
+  const nativeRef = useRef(false);
+  nativeRef.current = nativeEnabled;
   const [session, setSession] = useState<Session>(loadSession),
     sessionRef = useRef(session);
   const [workspace, setWorkspace] = useState("studio"),
@@ -271,8 +286,64 @@ export default function App() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     audio.current?.stop();
+    if (nativeRef.current)
+      void nativeRequest("transport", { playing: false }).catch(() => {});
     setPlaying(false);
   }, []);
+  const refreshNative = useCallback(async () => {
+    try {
+      const response = await fetch("/api/native/status");
+      if (!response.ok) return;
+      const state = (await response.json()) as NativeStatus;
+      setNativeState(state);
+      if (nativeRef.current) {
+        setPosition(state.position ?? 0);
+        setPlaying(!!state.playing);
+        setLevel(Math.min(100, (state.outputPeak ?? 0) * 100));
+      }
+    } catch {
+      /* The browser fallback remains usable without native audio. */
+    }
+  }, []);
+  useEffect(() => {
+    void refreshNative();
+    const poll = setInterval(
+      () => void refreshNative(),
+      nativeEnabled ? 350 : 2500,
+    );
+    return () => clearInterval(poll);
+  }, [nativeEnabled, refreshNative]);
+  useEffect(() => {
+    if (!nativeEnabled || !nativeState?.available || nativeState.editorOpen)
+      return;
+    const timer = setTimeout(
+      () =>
+        void nativeRequest("configure", {
+          tone: session.tone,
+          bpm: session.bpm,
+          referenceVolume: session.referenceVolume,
+          guitarVolume: session.guitarVolume,
+        }).catch((error) => notify(String(error))),
+      350,
+    );
+    return () => clearTimeout(timer);
+  }, [
+    session.tone,
+    session.bpm,
+    session.referenceVolume,
+    session.guitarVolume,
+    nativeEnabled,
+    nativeState?.available,
+    nativeState?.editorOpen,
+    notify,
+  ]);
+  const chooseNative = (enabled: boolean) => {
+    stop();
+    audio.current?.stopInput();
+    setMic(false);
+    setNativeEnabled(enabled);
+    if (!enabled) void nativeRequest("stop").catch(() => {});
+  };
   const engine = useCallback(async () => {
     if (!audio.current) {
       audio.current = new GuitarEngine(
@@ -341,6 +412,7 @@ export default function App() {
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [chats, thinking]);
   useEffect(() => {
+    if (nativeEnabled) return;
     if (!playing && !mic) {
       setLevel(0);
       return;
@@ -361,8 +433,35 @@ export default function App() {
       );
     }, 100);
     return () => clearInterval(t);
-  }, [playing, mic]);
+  }, [playing, mic, nativeEnabled]);
   const startPlayback = async () => {
+    if (nativeRef.current) {
+      try {
+        if (playing) {
+          stop();
+          return;
+        }
+        if (!nativeState?.running) {
+          setWorkspace("audio");
+          notify(
+            "Start native audio in Audio & VST3, then play the arrangement.",
+          );
+          return;
+        }
+        await nativeRequest("prepare", session);
+        await nativeRequest("transport", {
+          playing: true,
+          loop,
+          metronome,
+          position,
+        });
+        setPlaying(true);
+        await refreshNative();
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
     if (playing) {
       stop();
       return;
@@ -442,6 +541,11 @@ export default function App() {
     stop();
     setPosition(seconds);
     playPosition.current = seconds;
+    if (nativeRef.current && nativeState?.running)
+      void nativeRequest("transport", {
+        playing: false,
+        position: seconds,
+      }).catch((error) => notify(String(error)));
   };
   const applyPreset = (index: number) => {
     update({
@@ -469,6 +573,14 @@ export default function App() {
       setAnalysisStart(0);
       setPosition(0);
       setSong(file.name.replace(/\.[^.]+$/, ""));
+      if (nativeState?.available) {
+        try {
+          await nativeUpload(file, "reference");
+        } catch (error) {
+          notify(`Loaded for analysis; native reference: ${String(error)}`);
+          return;
+        }
+      }
       notify(
         "Song loaded locally. Choose Analyze to create an editable draft.",
       );
@@ -567,6 +679,20 @@ export default function App() {
     );
   };
   const toggleMic = async () => {
+    if (nativeRef.current) {
+      try {
+        if (!nativeState?.running) {
+          setWorkspace("audio");
+          notify("Select your ASIO device and start native audio first.");
+          return;
+        }
+        await nativeRequest("monitor", { enabled: !nativeState.monitor });
+        await refreshNative();
+      } catch (error) {
+        notify(String(error));
+      }
+      return;
+    }
     if (mic) {
       audio.current?.stopInput();
       setMic(false);
@@ -670,7 +796,18 @@ export default function App() {
   const exportAudio = async () => {
     setExporting(true);
     try {
-      download(await renderWav(session), "selah-arrangement.wav");
+      if (nativeEnabled) {
+        const response = await fetch("/api/native/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(session),
+        });
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || "Native render failed.");
+        }
+        download(await response.blob(), "selah-native-rack.wav");
+      } else download(await renderWav(session), "selah-arrangement.wav");
       notify(
         "Processed guitar arrangement exported. Reference audio is excluded.",
       );
@@ -747,7 +884,14 @@ export default function App() {
     },
   ];
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      style={appearanceStyle}
+      data-contrast={appearance.contrast}
+      data-density={appearance.compact ? "compact" : "comfortable"}
+      data-sidebar={appearance.sidebar}
+      data-assistant={appearance.assistant}
+    >
       <aside className="sidebar">
         <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
           <div className="brand-symbol">
@@ -764,8 +908,9 @@ export default function App() {
         <div className="nav-label">YOUR WORKSPACE</div>
         <nav aria-label="Workspaces">
           {[
-            { id: "studio", icon: SlidersHorizontal, label: "Tone studio" },
+            { id: "studio", icon: SlidersHorizontal, label: "Device rack" },
             { id: "tabs", icon: ListMusic, label: "Tabs & sequencer" },
+            { id: "audio", icon: AudioLines, label: "Audio & VST3" },
             { id: "sources", icon: Search, label: "Find song resources" },
             { id: "presets", icon: Layers3, label: "Tone collection" },
           ].map((n) => (
@@ -818,7 +963,13 @@ export default function App() {
             <div>
               My studio<small>FREE & OPEN SOURCE</small>
             </div>
-            <Settings2 size={16} />
+            <button
+              className="icon-button"
+              aria-label="Customize workspace"
+              onClick={() => setPreferencesOpen(true)}
+            >
+              <Settings2 size={16} />
+            </button>
           </div>
         </div>
       </aside>
@@ -828,15 +979,29 @@ export default function App() {
             Workspace <span>/</span>
             <b>
               {workspace === "studio"
-                ? "Tone studio"
+                ? "Device rack"
                 : workspace === "tabs"
                   ? "Tabs & sequencer"
-                  : workspace === "sources"
-                    ? "Song resources"
-                    : "Tone collection"}
+                  : workspace === "audio"
+                    ? "Audio & VST3"
+                    : workspace === "sources"
+                      ? "Song resources"
+                      : "Tone collection"}
             </b>
           </div>
           <div className="top-actions">
+            <span className="engine-top-status">
+              {nativeEnabled
+                ? `${nativeState?.driver ?? "NATIVE"} · ${((nativeState?.sampleRate ?? 48000) / 1000).toFixed(1)}k · ${nativeState?.blockSize ?? 256}`
+                : "BROWSER AUDIO"}
+            </span>
+            <button
+              className="button small"
+              aria-label="Workspace preferences"
+              onClick={() => setPreferencesOpen(true)}
+            >
+              <SlidersHorizontal size={14} /> View
+            </button>
             <span className="local-badge">
               <span />
               LOCAL SESSION
@@ -850,31 +1015,51 @@ export default function App() {
           <main className="workspace">
             <div className="page-heading">
               <div>
-                <div className="eyebrow">LESS SETUP. MORE PLAYING.</div>
+                <div className="eyebrow">SELAH / GUITAR WORKSTATION 2</div>
                 <h1>
                   {workspace === "studio"
-                    ? "Make room for your sound."
+                    ? "Device rack"
                     : workspace === "tabs"
-                      ? "Every note, in its place."
-                      : workspace === "sources"
-                        ? "Find the song. Check the source."
-                        : "A sound for every moment."}
+                      ? "Arrangement"
+                      : workspace === "audio"
+                        ? "Audio & VST3"
+                        : workspace === "sources"
+                          ? "Song resources"
+                          : "Preset browser"}
                 </h1>
                 <p>
                   {workspace === "studio"
-                    ? "From the song that inspires you to a tone that’s yours."
+                    ? "Shape your signal. Save the sound. Build your next set."
                     : workspace === "tabs"
                       ? "Write a part, play it back, and make it your own."
-                      : workspace === "sources"
-                        ? "Free resources first. Real links. Transparent checks."
-                        : "Thoughtful starting points for your next Sunday."}
+                      : workspace === "audio"
+                        ? "Native ASIO I/O, cabinet convolution, and your VST3 effects."
+                        : workspace === "sources"
+                          ? "Free resources first. Real links. Transparent checks."
+                          : "Thoughtful starting points for your next Sunday."}
                 </p>
               </div>
               <span className="heading-icon">
                 <AudioLines size={28} />
               </span>
             </div>
-            {workspace === "presets" ? (
+            {workspace === "audio" ? (
+              <NativeRack
+                session={session}
+                setTone={(tone, bpm) =>
+                  update({
+                    tone,
+                    preset: "Custom tone",
+                    ...(bpm ? { bpm } : {}),
+                  })
+                }
+                state={nativeState}
+                enabled={nativeEnabled}
+                setEnabled={chooseNative}
+                refresh={refreshNative}
+                notify={notify}
+              />
+            ) : workspace === "presets" ? (
               <section className="collection-grid">
                 {PRESETS.map((p, i) => (
                   <button
@@ -1221,6 +1406,27 @@ export default function App() {
                 </section>
                 {workspace === "studio" && (
                   <>
+                    <div className="studio-engine-strip">
+                      <span
+                        className={`engine-indicator ${nativeState?.running ? "on" : ""}`}
+                      />
+                      <span>
+                        {nativeEnabled
+                          ? `${nativeState?.driver ?? "Native engine"} · CPU ${nativeState?.cpuLoad?.toFixed(1) ?? "0"}%`
+                          : "Browser preview engine"}
+                      </span>
+                      <span>
+                        {nativeEnabled
+                          ? `${nativeState?.plugins?.length ?? 0} VST3 effects · ${nativeState?.irLoaded ? "Cabinet IR" : "Filter cabinet"}`
+                          : "Choose native audio for ASIO + VST3 processing"}
+                      </span>
+                      <button
+                        className="button small"
+                        onClick={() => setWorkspace("audio")}
+                      >
+                        Audio setup <ArrowRight size={12} />
+                      </button>
+                    </div>
                     <div className="section-title">
                       <div>
                         <h2>Your signal chain</h2>
@@ -1864,7 +2070,13 @@ export default function App() {
               <Music2 size={18} />
             </span>
             <div>
-              <b>{session.name}</b>
+              <input
+                className="session-title-input"
+                aria-label="Session name"
+                maxLength={200}
+                value={session.name}
+                onChange={(e) => update({ name: e.target.value })}
+              />
               <span>{session.preset}</span>
             </div>
           </div>
@@ -1935,14 +2147,16 @@ export default function App() {
           <div className="transport-mixer">
             <div className="input-controls">
               <button
-                className={`mic-button ${mic ? "enabled" : ""}`}
+                className={`mic-button ${(nativeEnabled ? nativeState?.monitor : mic) ? "enabled" : ""}`}
                 onClick={() => void toggleMic()}
                 title="Use headphones before enabling live guitar monitoring"
               >
                 <Mic2 size={15} />
-                {mic ? "Input on" : "Guitar input"}
+                {(nativeEnabled ? nativeState?.monitor : mic)
+                  ? "Input on"
+                  : "Guitar input"}
               </button>
-              {devices.length > 0 && (
+              {!nativeEnabled && devices.length > 0 && (
                 <select
                   aria-label="Audio input device"
                   value={device}
@@ -2005,6 +2219,13 @@ export default function App() {
           </button>
         </div>
       )}
+      {preferencesOpen && (
+        <Appearance
+          value={appearance}
+          setValue={setAppearance}
+          onClose={() => setPreferencesOpen(false)}
+        />
+      )}
       {help && (
         <div className="modal-backdrop" onClick={() => setHelp(false)}>
           <section
@@ -2063,6 +2284,23 @@ export default function App() {
               onClick={() => void refreshStatus()}
             >
               <RefreshCw size={14} /> Refresh connection
+            </button>
+            <h3>ASIO & VST3</h3>
+            <p>
+              Open Audio & VST3 to select your interface, channels, sample rate,
+              and buffer. Start audio with monitoring off, then enable Guitar
+              monitor when your headphones are connected. Add compatible 64-bit
+              VST3 effects and a cabinet IR there. Use View to customize the
+              black workspace.
+            </p>
+            <button
+              className="button small"
+              onClick={() => {
+                setHelp(false);
+                setWorkspace("audio");
+              }}
+            >
+              Open audio setup <ArrowRight size={14} />
             </button>
             <h3>Input & mix</h3>
             <p>

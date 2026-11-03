@@ -6,6 +6,11 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { checkSource } from "./source-check.mjs";
+import {
+  NativeEngine,
+  scanPlugins,
+  localAudioUpload,
+} from "./native-engine.mjs";
 
 const exec = promisify(execFile),
   root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -147,7 +152,9 @@ async function runAssistant(body) {
       { status: 429 },
     );
   if (!body || typeof body !== "object" || Array.isArray(body))
-    throw Object.assign(new Error("A JSON object is required."), { status: 400 });
+    throw Object.assign(new Error("A JSON object is required."), {
+      status: 400,
+    });
   if (
     typeof body.prompt !== "string" ||
     !body.prompt.trim() ||
@@ -313,11 +320,11 @@ async function runAssistant(body) {
       await rm(temp, { recursive: true, force: true });
   }
 }
-async function readBody(req) {
+async function readBody(req, maximum = 32000) {
   let body = "";
   for await (const chunk of req) {
     body += chunk;
-    if (body.length > 32000)
+    if (body.length > maximum)
       throw Object.assign(new Error("Request too large."), { status: 413 });
   }
   try {
@@ -327,6 +334,7 @@ async function readBody(req) {
   }
 }
 export async function startServer(port = Number(process.env.PORT) || 5174) {
+  const native = new NativeEngine();
   const server = http.createServer(async (req, res) => {
     const json = (code, value) => {
       res.writeHead(code, {
@@ -351,6 +359,54 @@ export async function startServer(port = Number(process.env.PORT) || 5174) {
           return json(403, { error: "Origin rejected." });
         if (req.headers["sec-fetch-site"] === "cross-site")
           return json(403, { error: "Cross-site request rejected." });
+        if (req.method === "GET" && req.url === "/api/native/status")
+          return json(200, await native.status());
+        if (req.method === "POST" && req.url === "/api/native/render") {
+          if (
+            !String(req.headers["content-type"]).startsWith("application/json")
+          )
+            return json(415, { error: "JSON content type required." });
+          await native.request("prepare", await readBody(req, 2 * 1024 * 1024));
+          const result = await native.request("render");
+          const renderPath = path.resolve(result.path);
+          if (
+            !renderPath.startsWith(
+              path.resolve(os.tmpdir()) + path.sep + "selah-native-render-",
+            ) ||
+            !renderPath.endsWith(".wav")
+          )
+            throw new Error("Invalid native render path.");
+          const rendered = await readFile(renderPath);
+          res.writeHead(200, {
+            "Content-Type": "audio/wav",
+            "Content-Disposition":
+              'attachment; filename="selah-native-rack.wav"',
+          });
+          return res.end(rendered);
+        }
+        if (req.method === "POST" && req.url === "/api/native/upload") {
+          const kind =
+            req.headers["x-selah-kind"] === "ir" ? "ir" : "reference";
+          const name = decodeURIComponent(
+            String(req.headers["x-selah-filename"] || "audio.wav"),
+          );
+          return json(200, await localAudioUpload(req, native, kind, name));
+        }
+        if (req.method === "POST" && req.url === "/api/native/request") {
+          if (
+            !String(req.headers["content-type"]).startsWith("application/json")
+          )
+            return json(415, { error: "JSON content type required." });
+          const body = await readBody(req, 24 * 1024 * 1024);
+          if (!body || typeof body.command !== "string")
+            return json(400, { error: "A native command is required." });
+          return json(
+            200,
+            body.command === "scan"
+              ? await scanPlugins(body.data?.roots)
+              : await native.request(body.command, body.data),
+          );
+        }
         if (req.method === "GET" && req.url === "/api/status")
           return json(200, await status());
         if (req.method === "POST" && req.url === "/api/ask") {
@@ -405,6 +461,8 @@ export async function startServer(port = Number(process.env.PORT) || 5174) {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", resolve);
   });
+  server.once("close", () => native.close());
+  server.nativeEngine = native;
   console.log(
     `Selah / GuitarSim AI: http://127.0.0.1:${server.address().port}`,
   );

@@ -1,8 +1,10 @@
-# Selah — GuitarSim AI
+# Selah 2 — GuitarSim AI
 
-A free, open-source guitar workstation for praise and worship practice: a playable effects rack, local reference audio, editable guitar tabs, a shared step sequencer, and an assistant using **your ChatGPT account through the official Codex CLI, without an API key**.
+A free, open-source guitar workstation with native ASIO input/output, 64-bit VST3 effects, cabinet convolution, and a customizable black workspace. Reference audio, editable tabs and the sequencer share one app with an assistant using **your ChatGPT account through the official Codex CLI, without an API key**.
 
 ![Selah guitar workstation with its worship effects rack and account companion](docs/studio.png)
+
+![Native ASIO configuration, metering, and VST3 device rack](docs/native-rack.png)
 
 ## Get the Windows app
 
@@ -28,7 +30,22 @@ npm run build
 npm start
 ```
 
-Open **http://127.0.0.1:5174**. To run the desktop shell from source, build first and use `npm run desktop`. To package Windows x64, use `npm run package:win`.
+Open **http://127.0.0.1:5174**. To run the desktop shell from source, build first and use `npm run desktop`. For native audio from source, install Python 3.12 and run `npm run native:setup`. To package Windows x64 with its self-contained native runtime, use `npm run package:win`.
+
+## ASIO, VST3, and the black workspace
+
+1. Open **Audio & VST3**. Select **ASIO**, your connected interface, guitar input channel, stereo outputs, sample rate, and buffer. Start at **256 samples**; use 512 if your plugin chain misses deadlines. A vendor’s installed driver only appears when PortAudio can actually open/enumerate that device; installed-but-disconnected driver names are not invented as selectable hardware.
+2. Select **Start audio**. Monitoring starts **off**. Connect headphones, set your interface’s instrument/Hi-Z input and gain appropriately, then enable **Guitar monitor**. The native engine is automatically selected for input and arrangement playback. The footer transport, sequencer and loaded reference now use that output device. The driver is never silently replaced by browser audio if opening fails.
+3. Use **Get free plugins** for official developer downloads: NAM, BYOD, Chow Matrix, Chow Tape Model, and the standard TDR Nova edition. Install the **64-bit Windows VST3** edition, stop audio, then **Scan folders → Add to rack**. The app lists installed bundles without executing them during a scan. Recognizable 32-bit Windows modules are omitted. Other plugin formats, instruments, and every possible shell/container plugin are not covered.
+4. Reorder blocks with the arrows, bypass effects, adjust exposed parameters, or select **Open UI** for the plugin’s own editor. Close that editor before changing the rack from Selah. New plugins are placed before the cabinet stage; move delays/reverbs later as desired. **Load WAV / AIFF IR** replaces the native filter cabinet with convolution plus its EQ/filter stage. If an amp plugin already includes a cabinet simulation, bypass the extra cabinet block to avoid doubling it.
+5. **Save rack / Open rack** saves/restores native effect order, built-in values, VST3 internal states and embedded cabinet IR audio. Stop audio and close editors first. Installed plugins are still required to restore their states. Keep trusted native presets under 24 MB. **Save session** separately preserves the reference name, notes, tempo and basic tone settings; reopen reference audio after restarting.
+6. Use **View** for the black/graphite surface, six accent colors or a custom color, interface scale (85–125%), spacing, sidebar/companion visibility and widths. Settings and device choices persist on the device. The session name is editable in the footer.
+
+The native rack uses compiled **Pedalboard/JUCE DSP on the CPU**, float32 audio buffers, PortAudio/ASIO device I/O, a selectable sample rate up to 192 kHz when the device supports it, and a final limiter. Native WAV exports are **24-bit PCM**, with the external VST3 chain and cabinet IR included. Stop native audio before offline export; reference audio and live input are excluded from the exported sequence. Browser-only WAV export retains its original 16-bit implementation.
+
+CPU DSP budget, peak load, driver-reported I/O latency, driver flags, configuration gaps and clipping are shown. Driver-reported latency is **not** a loopback measurement and excludes converters and unreported plugin latency. Plugin latency is listed per block. Python coordinates streaming/control around compiled processors, so this release does not promise a hard real-time deadline at tiny buffers. Structural changes can interrupt audio; stop audio for loading plugins and IRs. Native plugin crashes are isolated from the desktop UI; use **Restart** to recover and reopen your saved rack.
+
+The host does not provide GPU DSP. A plugin that implements GPU processing can manage that internally; GPU processing was not tested. High sample rates or oversampling options inside a plugin cost CPU and can increase latency. For hardware-like amp realism, use an appropriate neural capture, a good cabinet IR, compatible plugin settings and calibrated input gain. Tone quality is not certified as equal to a named premium hardware pedal.
 
 ## Connect ChatGPT without an API key
 
@@ -79,11 +96,11 @@ An arbitrary mastered recording does not reveal a uniquely recoverable pedalboar
 
 Pitchy detects a **single predominant pitch**. In a full mix, vocals or bass may dominate. It does not isolate guitar, transcribe polyphonic chords, or recover all instruments. Guitar-only stems work best. Tempo can be half or double the intended tempo; key estimation can be ambiguous. Review frets, note lengths, key, and tempo by ear. Load a draft, then adjust BPM and edit the shared arrangement. WAV exports contain the synthesized guitar arrangement with effects, excluding reference audio and live input.
 
-Live input latency depends on your interface, OS, and browser. This is not an ASIO host, VST host, commercial amp profiler, or a replacement for a production DAW. Hardware monitoring has to be checked on your actual audio interface.
+Live input latency depends on your interface, OS, and browser. The browser preview uses Web Audio. The separate native CPU engine hosts ASIO and VST3; it does not include a trained amp model or promise parity with a commercial pedalboard. Hardware monitoring has to be checked on your actual audio interface.
 
 ## Privacy and local service
 
-Audio decode, pitch analysis, effects, sequencing, and rendering happen locally. Questions, session metadata, recent companion messages, and analysis summaries are sent to OpenAI only when you request an AI action; **audio samples are not sent**. Web search sends the song/artist/version query, and source verification visits returned public HTTPS pages. Fonts may load from Google Fonts; fallback system fonts work offline.
+Audio decode, pitch analysis, effects, sequencing, and rendering happen locally. With native mode, uploaded reference audio or IR files are transferred to the local engine on the same computer; they are not uploaded to an external server. Questions, session metadata, recent companion messages, and analysis summaries are sent to OpenAI only when you request an AI action; **audio samples are not sent**. Web search sends the song/artist/version query, and source verification visits returned public HTTPS pages. Fonts may load from Google Fonts; fallback system fonts work offline.
 
 The assistant service binds to `127.0.0.1`, checks Host and Origin, rejects cross-site requests, limits request sizes, uses structured responses, runs Codex in a temporary read-only workspace with shell tools disabled, and ignores the user’s Codex project configuration for those runs. Keep it local; this service is not designed for public hosting. The public GitHub repository contains source and app binaries, not songs, credentials, or private sessions.
 
@@ -99,4 +116,4 @@ Tests cover known-pitch transcription, silence, synthetic tempo, fingering, malf
 
 ## Technology and license
 
-React, TypeScript, Vite, Electron, Web Audio, [Pitchy](https://github.com/ianprime0509/pitchy) (0BSD), and Lucide (ISC). No proprietary audio assets or song recordings are bundled. This project is released under the [MIT license](LICENSE). Dependencies retain their respective licenses.
+React, TypeScript, Vite, Electron, Web Audio, [Pitchy](https://github.com/ianprime0509/pitchy) (0BSD), and Lucide (ISC). No proprietary audio assets or song recordings are bundled. The original UI/browser/bridge code is [MIT licensed](LICENSE). The separate native engine is [GPL-3.0-or-later](native/LICENSE), with runtime dependency notices included. See [third-party notices](THIRD_PARTY_NOTICES.md). Dependencies and external plugins retain their respective licenses.

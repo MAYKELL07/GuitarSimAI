@@ -234,7 +234,7 @@ export function validateSession(value: unknown): Session {
     s.tone.subdivision < 0.25 ||
     !Array.isArray(s.tone.bypass) ||
     !s.tone.bypass.every((x) =>
-      ["compressor", "drive", "cabinet", "chorus", "delay", "reverb"].includes(
+      ["gate", "compressor", "drive", "cabinet", "chorus", "delay", "reverb"].includes(
         x,
       ),
     )

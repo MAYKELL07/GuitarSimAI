@@ -72,5 +72,8 @@ else {
     }
   });
   app.on("window-all-closed", () => app.quit());
-  app.on("before-quit", () => server?.close());
+  app.on("before-quit", () => {
+    server?.nativeEngine?.close();
+    server?.close();
+  });
 }
