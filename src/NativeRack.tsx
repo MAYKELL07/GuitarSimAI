@@ -20,6 +20,7 @@ import {
 import type { NativeDevice, NativeStatus } from "./native";
 import { nativeRequest, nativeUpload } from "./native";
 import type { Session, Tone } from "./music";
+import SignalGrid from "./SignalGrid";
 
 const blockNames: Record<string, string> = {
   gate: "Noise gate",
@@ -696,6 +697,23 @@ export default function NativeRack({
             </label>
           ))}
         </div>
+        <SignalGrid
+          session={session}
+          state={state}
+          setTone={setTone}
+          refresh={refresh}
+          notify={notify}
+          openAudio={() =>
+            document
+              .querySelector(".native-engine-panel")
+              ?.scrollIntoView({ behavior: "smooth" })
+          }
+          addEffect={() =>
+            document
+              .querySelector(".native-plugin-browser")
+              ?.scrollIntoView({ behavior: "smooth" })
+          }
+        />
         <div className="native-chain">
           {(state?.order.length ? state.order : Object.keys(blockNames)).map(
             (id, index) => {

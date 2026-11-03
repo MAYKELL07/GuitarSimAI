@@ -1,6 +1,6 @@
 {
   "name": "guitarsim-ai",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "description": "A local guitar workstation for worship tones, reference audio, tablature, sequencing and a ChatGPT account assistant.",

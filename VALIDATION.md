@@ -19,6 +19,8 @@ Delivered version: 2.0.0, 3 November 2026. Windows x64, Node 24, Python 3.12, Ch
 
 ## Browser checks
 
+- Version 2.1: ASIO shortcut opens the native driver settings; signal-grid selection, bypass, drag reordering, tone snapshot capture/recall, undo/redo and installed TDR Nova parameter display were exercised in the production UI. Native audio was stopped during these UI checks.
+
 - Production app and ChatGPT account status render.
 - Transport produces a nonzero output signal and can pause.
 - A step added in the sequencer appears in the tab editor; fret and note length can be changed.

@@ -53,6 +53,7 @@ import {
 import type { Analysis, Note, Session, Tone } from "./music";
 import { GuitarEngine, makeDemo, renderWav } from "./audio";
 import NativeRack from "./NativeRack";
+import SignalGrid from "./SignalGrid";
 import Appearance, { useAppearance } from "./Appearance";
 import { nativeRequest, nativeUpload } from "./native";
 import type { NativeStatus } from "./native";
@@ -990,6 +991,13 @@ export default function App() {
             </b>
           </div>
           <div className="top-actions">
+            <button
+              className="button small"
+              aria-label="Open ASIO settings"
+              onClick={() => setWorkspace("audio")}
+            >
+              <SlidersHorizontal size={14} /> ASIO settings
+            </button>
             <span className="engine-top-status">
               {nativeEnabled
                 ? `${nativeState?.driver ?? "NATIVE"} · ${((nativeState?.sampleRate ?? 48000) / 1000).toFixed(1)}k · ${nativeState?.blockSize ?? 256}`
@@ -1406,6 +1414,16 @@ export default function App() {
                 </section>
                 {workspace === "studio" && (
                   <>
+                    <SignalGrid
+                      session={session}
+                      state={nativeState}
+                      setTone={(tone) =>
+                        update({ tone, preset: "Custom tone" })
+                      }
+                      refresh={refreshNative}
+                      notify={notify}
+                      openAudio={() => setWorkspace("audio")}
+                    />
                     <div className="studio-engine-strip">
                       <span
                         className={`engine-indicator ${nativeState?.running ? "on" : ""}`}

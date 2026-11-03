@@ -4,6 +4,12 @@ A free, open-source guitar workstation with native ASIO input/output, 64-bit VST
 
 ![Selah guitar workstation with its worship effects rack and account companion](docs/studio.png)
 
+![Signal designer with colored modules and the selected effect editor](docs/signal-designer.png)
+
+Version 2.1 adds a numbered serial signal grid inspired by hardware editor workflows. Select a block to edit its tone or VST3 parameters, drag blocks to reorder the native chain, and use tone undo/redo. Four local tone snapshots (A–D) capture on first click, recall on later clicks, and replace on right-click. Snapshots store built-in tone values and bypass only; use Save rack for VST states, routing and IRs. Parallel routing and full Guitar Rig feature parity are not implemented.
+
+The **ASIO settings** button is always in the top bar and also appears in the signal designer. It opens Selah’s Audio & VST3 configuration for driver, channels, sample rate and buffer size.
+
 ![Native ASIO configuration, metering, and VST3 device rack](docs/native-rack.png)
 
 ## Get the Windows app
