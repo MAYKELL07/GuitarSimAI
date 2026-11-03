@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env*
+!.env.example
+.guitarsim/
+test-results/
+playwright-report/
+.playwright-cli/
+output/
+*.log
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.guitarsim.json
+release/

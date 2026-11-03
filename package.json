@@ -1,0 +1,46 @@
+{
+  "name": "guitarsim-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local guitar workstation for worship tones, reference audio, tablature, sequencing and a ChatGPT account assistant.",
+  "scripts": {
+    "dev": "node server/dev.mjs",
+    "build": "tsc -b && vite build",
+    "start": "node server/index.mjs",
+    "test": "tsx --test tests/*.test.ts",
+    "desktop": "node node_modules/electron/install.js && electron .",
+    "package:win": "npm run build && node scripts/package-windows.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "pitchy": "^4.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^45.2.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "desktop/main.mjs",
+  "overrides": {
+    "glob": "^14.0.3",
+    "minimatch": "^11.0.4"
+  },
+  "license": "MIT",
+  "productName": "Selah",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MAYKELL07/GuitarSimAI.git"
+  }
+}
