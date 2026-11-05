@@ -6,14 +6,18 @@ The new app has no Electron, browser, JavaScript, Python audio process or local 
 > **Native rewrite preview.** Guitar Rig 7 is the quality target, not a verified parity claim.
 > See [feature coverage and limits](docs/NATIVE_STATUS.md) before replacing a working rig.
 
+![Native C++ rack interface](docs/native-cpp.png)
+
 ## Windows software
 
-The C++ source is available now. **A verified native executable has not been published:**
-the initial Windows CI job could not start because GitHub reported an account billing lock.
-Build from source with MSVC using the instructions below. The configured
-[native workflow](https://github.com/MAYKELL07/GuitarSimAI/actions/workflows/native-cpp.yml)
-will publish **Selah-cpp-windows-x64.zip** as an artifact after a successful build.
+Download the native **Selah-cpp-windows-x64.zip** from the
+[C++ preview release](https://github.com/MAYKELL07/GuitarSimAI/releases/tag/v3.0.0-preview.1),
+extract it, then open **Selah.exe**. The native binary is built locally with MSVC,
+with both CTest suites passing. It is unsigned. No Node.js or Python is required.
 Older releases named Selah-windows-x64.zip contain the legacy Electron app.
+
+The [native workflow](https://github.com/MAYKELL07/GuitarSimAI/actions/workflows/native-cpp.yml)
+also packages future builds, but GitHub Actions currently reports an account billing lock.
 
 1. Open **Audio setup** and select your audio interface, input channel, stereo outputs,
    sample rate and buffer. Windows ASIO and WASAPI use the actual installed devices.
@@ -45,6 +49,7 @@ Install **Visual Studio 2022 Build Tools** with **Desktop development with C++**
 cmake --preset windows
 cmake --build --preset windows --parallel 2
 ctest --preset windows
+.\scripts\package-cpp.ps1
 .\build\windows\Selah_artefacts\Release\Selah.exe
 ```
 

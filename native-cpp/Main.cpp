@@ -32,7 +32,11 @@ private:
     public:
         Window() : DocumentWindow("SELAH / Native guitar workstation",juce::Colour(0xff111318),allButtons) {
             setUsingNativeTitleBar(true); setContentOwned(new MainComponent,true); setResizable(true,false);
-            setResizeLimits(1050,720,2400,1600); centreWithSize(1360,900); setVisible(true);
+            setResizeLimits(1050,720,2400,1600);
+            const auto* display=juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+            const auto area=display ? display->userArea : juce::Rectangle<int>(0,0,1440,900);
+            centreWithSize(std::min(1360,area.getWidth()-48),std::min(860,area.getHeight()-80));
+            setVisible(true);
         }
         void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
     };

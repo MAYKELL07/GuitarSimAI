@@ -70,10 +70,19 @@ The application translation units also passed local Clang syntax checks against
 the pinned JUCE headers (with the ignored checkout's unsupported-MinGW guard
 temporarily suppressed only for this check). This does not build or link JUCE and
 does not establish a supported MinGW build. The unmodified dependency is retained.
-The supported Windows build, engine integration checks and visual rendering are
-not verified yet: the initial GitHub Actions run did not start because GitHub
-reported an account billing lock. Local Visual Studio Build Tools installation
-was blocked by automatic approval policy. No native executable is published.
+On 2026-11-05, after the user approved installing Microsoft Build Tools, the
+unmodified JUCE dependency and native application built successfully with MSVC
+19.44.35229.0, Visual Studio 2022 Build Tools and Windows SDK 10.0.26100.0.
+`ctest --preset windows --timeout 120` passed both DSP and whole-engine suites.
+Computer Use verified native-window startup and factory preset recall: selecting
+Velvet clean changed the title and the drive parameter from 14 to 3.
+Window startup now fits the primary display's usable area, avoiding a clipped
+title bar on shorter displays. The portable package includes the engine test
+report and a SHA-256 executable digest in build-info.json.
+
+GitHub Actions remains blocked by an account billing lock; the preview binary is
+a local MSVC Release build, not a successful hosted-CI artifact. The build tools
+were installed after explicit user approval. The executable is unsigned.
 
 Before a stable release, manual hardware checks remain required: driver opening,
 selected input/output channels, measured loopback latency, sustained playing at
