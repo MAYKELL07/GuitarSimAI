@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.22)
+project(Selah VERSION 3.0.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+option(SELAH_BUILD_TESTS "Build offline DSP regression tests" ON)
+include(FetchContent)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/native-cpp/JUCE/CMakeLists.txt")
+  add_subdirectory(native-cpp/JUCE EXCLUDE_FROM_ALL)
+else()
+  FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG 29396c22c93392d6738e021b83196283d6e4d850 GIT_SHALLOW FALSE)
+  FetchContent_MakeAvailable(JUCE)
+endif()
+juce_add_gui_app(Selah PRODUCT_NAME "Selah" COMPANY_NAME "GuitarSimAI"
+  BUNDLE_ID "org.guitarsim.selah" MICROPHONE_PERMISSION_ENABLED TRUE
+  MICROPHONE_PERMISSION_TEXT "Selah processes your guitar input locally.")
+target_sources(Selah PRIVATE native-cpp/Main.cpp native-cpp/Engine.cpp native-cpp/MainComponent.cpp)
+target_compile_definitions(Selah PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+  JUCE_PLUGINHOST_VST3=1 JUCE_ASIO=1 JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(Selah PRIVATE juce::juce_audio_utils juce::juce_dsp
+  juce::juce_recommended_config_flags)
+if(MSVC)
+  target_compile_options(Selah PRIVATE /W4 /permissive-)
+endif()
+if(SELAH_BUILD_TESTS)
+  enable_testing()
+  add_executable(SelahDspTests native-cpp/tests/DspTests.cpp)
+  target_include_directories(SelahDspTests PRIVATE native-cpp)
+  add_test(NAME DSP COMMAND SelahDspTests)
+  add_test(NAME Engine COMMAND Selah --self-test "${CMAKE_CURRENT_BINARY_DIR}/engine-test-report.txt")
+endif()
+install(TARGETS Selah RUNTIME DESTINATION . BUNDLE DESTINATION .)

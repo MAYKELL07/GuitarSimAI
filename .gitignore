@@ -22,3 +22,7 @@ __pycache__/
 *.pyc
 *.spec
 *.selah-rack.json
+build/
+.tools/
+native-cpp/JUCE/
+*.selah.json

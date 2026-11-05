@@ -1,0 +1,43 @@
+name: Native C++ desktop
+on:
+  push:
+    paths: ['native-cpp/**', 'CMakeLists.txt', 'CMakePresets.json', '.github/workflows/native-cpp.yml']
+  pull_request:
+    paths: ['native-cpp/**', 'CMakeLists.txt', 'CMakePresets.json', '.github/workflows/native-cpp.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: build/windows/_deps
+          key: juce-8.0.12-windows-v1
+      - name: Configure
+        run: cmake --preset windows
+      - name: Compile native application and tests
+        run: cmake --build --preset windows --parallel 2
+      - name: Offline audio and state regression tests
+        run: ctest --preset windows
+      - name: Stage portable application
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/Selah-cpp-windows-x64 | Out-Null
+          Copy-Item build/windows/Selah_artefacts/Release/Selah.exe release/Selah-cpp-windows-x64/
+          Copy-Item native-cpp/LICENSE, native-cpp/THIRD_PARTY.md, README.md release/Selah-cpp-windows-x64/
+          Copy-Item build/windows/_deps/juce-src/LICENSE.md release/Selah-cpp-windows-x64/JUCE-LICENSE.md
+          Compress-Archive -Path release/Selah-cpp-windows-x64/* -DestinationPath release/Selah-cpp-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Selah-cpp-windows-x64
+          path: release/Selah-cpp-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-test-results
+          path: |
+            build/windows/engine-test-report.txt
+            build/windows/Testing/Temporary/LastTest.log
