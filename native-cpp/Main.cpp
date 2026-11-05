@@ -3,8 +3,8 @@
 #include "tests/EngineChecks.h"
 class SelahApplication final : public juce::JUCEApplication {
 public:
-    juce::String getApplicationName() override { return "Selah"; }
-    juce::String getApplicationVersion() override { return "3.0.0"; }
+    const juce::String getApplicationName() override { return "Selah"; }
+    const juce::String getApplicationVersion() override { return "3.0.0"; }
     bool moreThanOneInstanceAllowed() override { return false; }
     void initialise(const juce::String& commandLine) override {
         if(commandLine.startsWith("--self-test ")) {

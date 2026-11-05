@@ -8,10 +8,12 @@ The new app has no Electron, browser, JavaScript, Python audio process or local 
 
 ## Windows software
 
-Download **Selah-cpp-windows-x64.zip** from [Releases](https://github.com/MAYKELL07/GuitarSimAI/releases),
-extract it and run **Selah.exe**. Native CI also publishes the portable ZIP as a
-[workflow artifact](https://github.com/MAYKELL07/GuitarSimAI/actions/workflows/native-cpp.yml).
-The native package is distinct from older Electron releases named Selah-windows-x64.zip.
+The C++ source is available now. **A verified native executable has not been published:**
+the initial Windows CI job could not start because GitHub reported an account billing lock.
+Build from source with MSVC using the instructions below. The configured
+[native workflow](https://github.com/MAYKELL07/GuitarSimAI/actions/workflows/native-cpp.yml)
+will publish **Selah-cpp-windows-x64.zip** as an artifact after a successful build.
+Older releases named Selah-windows-x64.zip contain the legacy Electron app.
 
 1. Open **Audio setup** and select your audio interface, input channel, stereo outputs,
    sample rate and buffer. Windows ASIO and WASAPI use the actual installed devices.

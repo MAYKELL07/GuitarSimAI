@@ -39,7 +39,7 @@ public:
     bool recording() const { return writer!=nullptr; }
     juce::String addPlugin(const juce::File&);
     void removePlugin(size_t);
-    juce::var state() const;
+    juce::var state();
     juce::String restore(const juce::var&);
     double readPitch();
     void prepareOffline(double sampleRate,int blockSize);

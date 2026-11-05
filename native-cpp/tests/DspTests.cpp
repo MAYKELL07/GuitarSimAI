@@ -27,5 +27,9 @@ int main() {
     selah::StereoDelay delay; delay.prepare(48000); float total=0;
     for(int i=0;i<48000;++i) { float l=i==0?1.f:0.f,r=0; delay.tick(l,r,.25f,.5f,1); total+=std::abs(l)+std::abs(r); }
     check(total>1,"Delay did not emit echoes");
+    selah::PluckedString string; string.reset(); check(string.tick()==0,"Reset string must be silent");
+    string.pluck(48000,40); double early=0,late=0;
+    for(int i=0;i<96000;++i) { const float x=string.tick(); check(std::isfinite(x)&&std::abs(x)<=.18f,"Plucked string unstable"); if(i<4800)early+=x*x; if(i>91200)late+=x*x; }
+    check(early>.001 && late<early,"Plucked string must emit a decaying note");
     std::cout<<"DSP passed: 8 pitches, silence, finite guard, EQ and delay at four sample rates.\n";
 }

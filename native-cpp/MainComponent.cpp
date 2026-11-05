@@ -150,7 +150,9 @@ MainComponent::MainComponent() {
     save.onClick=[this] { choose("Save Selah preset","*.selah.json",true,[this](juce::File f) {
         if(!f.hasFileExtension("json")) f=f.withFileExtension("selah.json");
         auto data=engine.state(); data.getDynamicObject()->setProperty("name",presetName); data.getDynamicObject()->setProperty("notes",notebook);
-        report(f.replaceWithText(juce::JSON::toString(data)) ? juce::String{} : "Cannot save preset.");
+        const auto json=juce::JSON::toString(data);
+        if(json.getNumBytesAsUTF8()>24*1024*1024) { report("Preset exceeds the 24 MB limit; remove large-state plugins first."); return; }
+        report(f.replaceWithText(json) ? juce::String{} : "Cannot save preset.");
     }); };
     open.onClick=[this] { choose("Open Selah C++ preset","*.json",false,[this](juce::File f) {
         if(f.getSize()>24*1024*1024) { report("Preset is larger than 24 MB."); return; }
@@ -174,6 +176,7 @@ void MainComponent::choose(juce::String title,juce::String patterns,bool saving,
     if(chooser) return;
     chooser=std::make_unique<juce::FileChooser>(title,juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),patterns,true);
     auto flags=juce::FileBrowserComponent::canSelectFiles|(saving ? juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::warnAboutOverwriting : juce::FileBrowserComponent::openMode);
+    if(patterns=="*.vst3") flags|=juce::FileBrowserComponent::canSelectDirectories;
     chooser->launchAsync(flags,[safe=juce::Component::SafePointer<MainComponent>(this),callback](const juce::FileChooser& fc) {
         if(!safe) return; const auto f=fc.getResult();
         if(f!=juce::File{}) callback(f);
@@ -189,7 +192,7 @@ void MainComponent::sync() {
     monitor.setButtonText(engine.monitoring ? "Monitor ON" : "Monitor OFF"); monitor.setToggleState(engine.monitoring,juce::dontSendNotification);
     play.setButtonText(engine.referencePlaying() ? "Pause reference" : "Play reference"); record.setButtonText(engine.recording() ? "Stop recording" : "Record WAV");
     record.setToggleState(engine.recording(),juce::dontSendNotification); click.setButtonText(engine.metronome ? "Click ON" : "Click OFF");
-    for(auto* b:{&audio,&open,&vst,&ir,&pluginList}) b->setEnabled(!engine.recording());
+    for(auto* b:{&audio,&save,&open,&vst,&ir,&pluginList,&snapshotA,&snapshotB}) b->setEnabled(!engine.recording());
     repaint();
 }
 void MainComponent::factoryPreset(int index) {
@@ -207,7 +210,7 @@ void MainComponent::snapshot(int index) {
 void MainComponent::showAudio() {
     if(engine.recording()) return;
     // Open the actual driver dialog. Initialisation is explicit; monitoring stays off.
-    if(!engine.running()) { auto error=engine.start(); if(error.isNotEmpty()) { report(error); return; } }
+    if(!engine.running()) report(engine.start());
     engine.monitoring=false; sync();
     auto* selector=new juce::AudioDeviceSelectorComponent(engine.devices,1,1,2,2,false,false,true,false);
     selector->setSize(620,500);
@@ -288,7 +291,8 @@ void MainComponent::resized() {
     for(auto* b:{&audio,&monitor,&start}) { b->setBounds(right-116,24,110,30); right-=124; }
     presetTitle.setBounds(248,112,getWidth()-660,34);
     save.setBounds(getWidth()-260,114,112,30); open.setBounds(getWidth()-140,114,118,30);
-    for(size_t i=0;i<presetButtons.size();++i) presetButtons[i]->setBounds(18,160+static_cast<int>(i)*36,190,29);
+    const int presetSpacing=std::min(36,(getHeight()-390)/12);
+    for(size_t i=0;i<presetButtons.size();++i) presetButtons[i]->setBounds(18,160+static_cast<int>(i)*presetSpacing,190,presetSpacing-5);
     notes.setBounds(24,getHeight()-178,178,30); arrange.setBounds(24,getHeight()-216,178,30);
     const int contentWidth=getWidth()-270;
     viewport.setBounds(246,190,contentWidth,getHeight()-390);

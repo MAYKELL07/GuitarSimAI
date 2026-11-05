@@ -54,7 +54,8 @@ the final mix, including reference, metronome and sequencer when enabled.
 
 `SelahDspTests` checks all six open guitar strings plus 440/880 Hz within 3 cents,
 silence rejection, NaN/Inf sanitisation, flat-EQ identity, filter impulse stability,
-and bounded max-feedback delay at 44.1/48/96/192 kHz. These tests passed locally
+bounded max-feedback delay at 44.1/48/96/192 kHz, and finite, decaying plucked-string
+output. These tests passed locally
 with Clang on Windows on 2026-11-05.
 
 `Selah --self-test <absolute-report-file>` runs the entire native engine offline:
@@ -64,6 +65,15 @@ handling. It does not initialise hardware. CTest runs this check in Windows CI.
 
 `Selah --screenshot <absolute-png-file>` renders the actual native UI without
 opening a device, for layout review. This is not a simulated HTML screenshot.
+
+The application translation units also passed local Clang syntax checks against
+the pinned JUCE headers (with the ignored checkout's unsupported-MinGW guard
+temporarily suppressed only for this check). This does not build or link JUCE and
+does not establish a supported MinGW build. The unmodified dependency is retained.
+The supported Windows build, engine integration checks and visual rendering are
+not verified yet: the initial GitHub Actions run did not start because GitHub
+reported an account billing lock. Local Visual Studio Build Tools installation
+was blocked by automatic approval policy. No native executable is published.
 
 Before a stable release, manual hardware checks remain required: driver opening,
 selected input/output channels, measured loopback latency, sustained playing at

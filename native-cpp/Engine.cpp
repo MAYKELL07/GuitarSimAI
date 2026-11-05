@@ -12,17 +12,18 @@ const Param params[]={{"input",&Tone::input,-24,36},{"output",&Tone::output,-60,
 }
 Engine::Engine() {
     for(auto& f:frets) f=-1;
-    formats.registerBasicFormats(); pluginFormats.addDefaultFormats();
+    formats.registerBasicFormats(); juce::addDefaultFormatsToManager(pluginFormats);
     diskThread.startThread(); pitchWindow.reserve(16384);
 }
 Engine::~Engine() {
     stop(); transport.setSource(nullptr); reader.reset(); diskThread.stopThread(3000);
 }
 juce::String Engine::start() {
+    if(!attached) { devices.addAudioCallback(this); attached=true; }
     if(running()) return {};
     const auto result=devices.initialise(1,2,nullptr,false);
     if(result.isNotEmpty()) return result;
-    devices.addAudioCallback(this); attached=true; monitoring=false;
+    monitoring=false;
     return {};
 }
 void Engine::stop() {
@@ -167,7 +168,7 @@ void Engine::audioDeviceIOCallbackWithContext(const float* const* inputs,int num
         const float gain=outGain.getNextValue();
         for(int c=0;c<2;++c) {
             float x=selah::safe(buffer.getSample(c,i)*gain+click);
-            const float y=x-dcX[c]+.995f*dcY[c]; dcX[c]=x; dcY[c]=y;
+            const float y=x-dcX[c]+std::exp(-2.f*static_cast<float>(selah::pi)*10.f/sr)*dcY[c]; dcX[c]=x; dcY[c]=y;
             clipping|=std::abs(y)>1;
             // Always-on finite output guard and ceiling, including when effects are bypassed.
             x=std::clamp(selah::safe(y),-.98f,.98f);
@@ -204,13 +205,13 @@ void Engine::playReference(bool play) {
 juce::String Engine::record(const juce::File& file) {
     if(!running()) return "Start audio before recording.";
     if(recording()) return "Already recording.";
-    auto stream=file.createOutputStream(); if(!stream) return "Cannot create recording file.";
-    if(!stream->setPosition(0) || !stream->truncate().wasOk()) return "Cannot overwrite recording file.";
+    std::unique_ptr<juce::OutputStream> stream=file.createOutputStream(); if(!stream) return "Cannot create recording file.";
+    auto* fileStream=dynamic_cast<juce::FileOutputStream*>(stream.get());
+    if(!fileStream || !fileStream->setPosition(0) || !fileStream->truncate().wasOk()) return "Cannot overwrite recording file.";
     juce::WavAudioFormat wav;
-    auto* w=wav.createWriterFor(stream.get(),currentRate,2,24,{},0);
+    auto w=wav.createWriterFor(stream,juce::AudioFormatWriterOptions{}.withSampleRate(currentRate).withNumChannels(2).withBitsPerSample(24));
     if(!w) return "Cannot create WAV writer.";
-    stream.release();
-    mutate([&] { writer=std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(w,diskThread,131072); recordOverruns=0; });
+    mutate([&] { writer=std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(w.release(),diskThread,131072); recordOverruns=0; });
     return {};
 }
 void Engine::stopRecording() { mutate([&] { writer.reset(); }); }
@@ -234,7 +235,9 @@ juce::String Engine::addPlugin(const juce::File& file) {
 void Engine::removePlugin(size_t index) {
     if(index<plugins.size() && !recording()) mutate([&] { plugins.erase(plugins.begin()+static_cast<ptrdiff_t>(index)); });
 }
-juce::var Engine::state() const {
+juce::var Engine::state() {
+    const bool resume=attached;
+    if(resume) devices.removeAudioCallback(this);
     auto* object=new juce::DynamicObject; object->setProperty("version",3);
     for(const auto& p:params) object->setProperty(p.id,(tone.*p.member).load());
     object->setProperty("amp",tone.amp.load()); object->setProperty("division",tone.division.load());
@@ -248,7 +251,9 @@ juce::var Engine::state() const {
     }
     object->setProperty("plugins",list);
     juce::Array<juce::var> sequence; for(const auto& f:frets) sequence.add(f.load()); object->setProperty("sequence",sequence);
-    return juce::var(object);
+    juce::var result(object);
+    if(resume) devices.addAudioCallback(this);
+    return result;
 }
 juce::String Engine::restore(const juce::var& data) {
     if(recording()) return "Stop recording before opening a preset.";
